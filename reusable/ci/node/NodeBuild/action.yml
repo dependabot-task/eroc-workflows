@@ -33,22 +33,22 @@ runs:
     # desc: Caching Node Modules
     # Uses, actions/cache@v2 github library
     # Doc: https://github.com/actions/cache
-    - name: Cache node_modules
-      uses: actions/cache@v2
-      with:
-        submodules: true
-        path: ~/.npm
-        key: ${{ runner.os }}-build-cache-node-modules
-        restore-keys: |
-          ${{ runner.os }}-build-cache-node-modules
+    # - name: Cache node_modules
+    #   uses: actions/cache@v2
+    #   with:
+    #     submodules: true
+    #     path: ~/.npm
+    #     key: ${{ runner.os }}-build-cache-node-modules
+    #     restore-keys: |
+    #       ${{ runner.os }}-build-cache-node-modules
     # ---------------------------------------
     # Setting Up Node
-    - name: Setup Registry
-      uses: actions/setup-node@v1
-      with:
-        node-version: ${{ env.NODE_VERSION }}
-        registry-url: "https://npm.pkg.github.com"
-        scope: "@Adaptavant"
+    # - name: Setup Registry
+    #   uses: actions/setup-node@v1
+    #   with:
+    #     node-version: ${{ env.NODE_VERSION }}
+    #     registry-url: "https://npm.pkg.github.com"
+    #     scope: "@Adaptavant"
     # ---------------------------------------
 
     # Installing Node dependencies
@@ -65,21 +65,21 @@ runs:
     # ---------------------------------------
 
     # Running Lint
-    - name: Lint
-      run: |
-        echo "::group::Running Lint"
-        npm run ${{ env.LINT_SCRIPT }}
-        echo "::endgroup::"
-      shell: bash
+    # - name: Lint
+    #   run: |
+    #     echo "::group::Running Lint"
+    #     npm run ${{ env.LINT_SCRIPT }}
+    #     echo "::endgroup::"
+    #   shell: bash
     # ---------------------------------------
 
-    # Running Build
-    - name: Build
-      run: |
-        echo "::group::Running Build"
-        npm run ${{ env.BUILD_SCRIPT }}
-        echo "::endgroup::"
-      shell: bash
+    # # Running Build
+    # - name: Build
+    #   run: |
+    #     echo "::group::Running Build"
+    #     npm run ${{ env.BUILD_SCRIPT }}
+    #     echo "::endgroup::"
+    #   shell: bash
     # ---------------------------------------
 
     # Running Test Case
@@ -91,15 +91,15 @@ runs:
       shell: bash
     # ---------------------------------------
 
-    # SonarQube Report
-    - name: SonarQube Report
-      run: |
-        echo "::group::Running SonarQube"
-        npm run ${{ env.SONAR_SCRIPT }}
-        echo "::endgroup::"
-      shell: bash
-      env:
-        SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+    # # SonarQube Report
+    # - name: SonarQube Report
+    #   run: |
+    #     echo "::group::Running SonarQube"
+    #     npm run ${{ env.SONAR_SCRIPT }}
+    #     echo "::endgroup::"
+    #   shell: bash
+    #   env:
+    #     SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
     # ---------------------------------------
 
     # Generate change logs and add it as comment in the respective pull request. It Will work only for pull request event
