@@ -33,22 +33,22 @@ runs:
     # desc: Caching Node Modules
     # Uses, actions/cache@v2 github library
     # Doc: https://github.com/actions/cache
-    # - name: Cache node_modules
-    #   uses: actions/cache@v2
-    #   with:
-    #     submodules: true
-    #     path: ~/.npm
-    #     key: ${{ runner.os }}-build-cache-node-modules
-    #     restore-keys: |
-    #       ${{ runner.os }}-build-cache-node-modules
+    - name: Cache node_modules
+      uses: actions/cache@v2
+      with:
+        submodules: true
+        path: ~/.npm
+        key: ${{ runner.os }}-build-cache-node-modules
+        restore-keys: |
+          ${{ runner.os }}-build-cache-node-modules
     # ---------------------------------------
     # Setting Up Node
-    # - name: Setup Registry
-    #   uses: actions/setup-node@v1
-    #   with:
-    #     node-version: ${{ env.NODE_VERSION }}
-    #     registry-url: "https://npm.pkg.github.com"
-    #     scope: "@Adaptavant"
+    - name: Setup Registry
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@dependabot-task"
     # ---------------------------------------
 
     # Installing Node dependencies
