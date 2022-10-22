@@ -1,0 +1,188 @@
+name: "NodeDeploy"
+description: "Builds and Deploys Node Project with Test cases and SonarQube"
+
+runs:
+  using: "composite"
+  steps:
+    # Precondition Check
+    - name: Precondition Check for Environment Variables
+      run: |
+        echo "::group::Precondition Check"
+        #SonarQube Parameters
+        [ -z "$BASE_BRANCH" ] && echo "BASE_BRANCH is null/empty"
+        [ -z "$HEAD_BRANCH" ] && echo "HEAD_BRANCH is null/empty"
+        [ -z "$PR_ID" ] && echo "PR_ID is null/empty"
+        [ -z "$IS_PULL_REQUEST_MERGED" ] && echo "IS_PULL_REQUEST_MERGED is null/empty"
+
+        #Common WorkFlow Parameters 
+        [ -z "$WORKFLOW_USERNAME" ] && echo "WORKFLOW_USERNAME is null/empty"
+        [ -z "$WORKFLOW_TOKEN" ] && echo "WORKFLOW_TOKEN is null/empty"
+
+        #GitHub Parameters 
+        [ -z "$GITHUB_USERNAME" ] && echo "GITHUB_USERNAME is null/empty"
+        [ -z "$GITHUB_TOKEN" ] && echo "GITHUB_TOKEN is null/empty"
+        [ -z "$GITHUB_PACKAGES_TOKEN" ] && echo "GITHUB_PACKAGES_TOKEN is null/empty"
+
+        #Runtime Parameters
+        [ -z "$JAVA_VERSION" ] && echo "JAVA_VERSION is null/empty"
+        [ -z "$GRADLE_VERSION" ] && echo "GRADLE_VERSION is null/empty"
+        [ -z "$SONAR_JDK_VERSION" ] && echo "SONAR_JDK_VERSION is null/empty"
+        [ -z "$NODE_VERSION" ] && echo "NODE_VERSION is null/empty"
+
+        #Script Parameters 
+        [ -z "$BUILD_SCRIPT" ] && echo "BUILD_SCRIPT is null/empty"
+        [ -z "$TEST_SCRIPT" ] && echo "TEST_SCRIPT is null/empty"
+        [ -z "$SONAR_SCRIPT" ] && echo "SONAR_SCRIPT is null/empty"
+        [ -z "$LINT_SCRIPT" ] && echo "LINT_SCRIPT is null/empty"
+        [ -z "$DEPLOYMENT_ENVIRONMENT" ] && echo "DEPLOYMENT_ENVIRONMENT is null/empty"
+
+        #GCP Parameters
+        [ -z "$GCP_PROJECT_ID" ] && echo "GCP_PROJECT_ID is null/empty"
+        [ -z "$GCP_SA_KEY" ] && echo "GCP_SA_KEY is null/empty"
+
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Caching Node Modules (Happens only if the project has node dependencies)
+    # desc: Caching Node Modules
+    # Uses, actions/cache@v2 github library
+    # Doc: https://github.com/actions/cache
+    - name: Cache node_modules
+      uses: actions/cache@v2
+      with:
+        submodules: true
+        path: ~/.npm
+        key: ${{ runner.os }}-build-cache-node-modules
+        restore-keys: |
+          ${{ runner.os }}-build-cache-node-modules
+    # ---------------------------------------
+    # Setting Up Node
+    # desc: Setting up Node Env
+    # Uses, actions/setup-node@v2 github library
+    # Doc: https://github.com/actions/setup-node
+    - name: Setup Registry
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@Adaptavant"
+    # ---------------------------------------
+
+    # Installing Node dependencies
+    # desc: Setting up Node Env
+    # Please make sure the package.json is available in the root directory
+    - name: Install Node Dependencies
+      run: |
+        echo "::group::Install Node Dependencies"       
+        npm ci
+        echo "::endgroup::"
+      shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ env.GITHUB_PACKAGES_TOKEN }}
+    # ---------------------------------------
+
+    # Running Lint
+    - name: Lint
+      run: |
+        echo "::group::Running Lint"
+        npm run ${{ env.LINT_SCRIPT }}
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Running Build
+    - name: Build
+      run: |
+        echo "::group::Running Build"
+        npm run ${{ env.BUILD_SCRIPT }}
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Running Test Case
+    - name: Test
+      run: |
+        echo "::group::Running Test"
+        npm run ${{ env.TEST_SCRIPT }}
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # SonarQube Report
+    - name: SonarQube Report
+      run: |
+        echo "::group::Running SonarQube"
+        npm run ${{ env.SONAR_SCRIPT }}
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Get version from package.json
+    - name: Get package version
+      id: package-version
+      run: |
+        echo "::group::Get Package Version"
+        echo "::set-output name=version::$(grep -m1 version package.json | awk -F: '{ print $2 }' | sed 's/[", ]//g')"
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Generate change logs and add it as comment in the respective pull request. It Will work only for pull request event
+    - name: Generate Change logs
+      id: change-logs
+      uses: bala-raj/pull-request-changelog@master
+      with:
+        token: ${{ env.GITHUB_TOKEN }}
+        branch: ${{ env.BASE_BRANCH }}
+        version: ${{ steps.package-version.outputs.version }}
+    # ---------------------------------------
+
+    # Format package version
+    - name: Format Package version
+      uses: bluwy/substitute-string-action@v1
+      id: packageVersion
+      with:
+        _input-text: ${{ steps.package-version.outputs.version}}
+        .: "-"
+    # ---------------------------------------
+
+    # Setup GCP SDK
+    - name: Setup Cloud SDK
+      uses: google-github-actions/setup-gcloud@v0.2.0
+      with:
+        project_id: ${{ env.GCP_PROJECT_ID }}
+        service_account_key: ${{ env.GCP_SA_KEY }}
+    # ---------------------------------------
+
+    # Deploys application to GCP
+    # To be made sure that the gcloud yaml config file should be named after the env it should be deployed to
+    # Example: staging - stage-deploy.yaml -> `deployment-environment` action param should be set to `stage`
+    - name: Deploy Application to GCP
+      run: gcloud app deploy ${{ env.DEPLOYMENT_ENVIRONMENT }}.yaml --no-promote --version ${{ steps.packageVersion.outputs.result }}
+      shell: bash
+    # ---------------------------------------
+
+    # Create Release
+    - name: Create Release
+      if: ${{ env.BASE_BRANCH }} == 'master'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.package-version.outputs.version }}
+        release_name: ${{ github.event.pull_request.title }}
+        body: |
+          ${{ steps.change-logs.outputs.content }}
+        draft: false
+        prerelease: false
+    # ---------------------------------------
+
+    # Delete head branch after merging the code
+    - name: Delete merged branch
+      uses: velanbala/delete-merged-action@master
+      with:
+        branches: "!dev, !main, !master"
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+    # ---------------------------------------

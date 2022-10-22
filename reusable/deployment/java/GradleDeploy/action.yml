@@ -1,0 +1,246 @@
+name: "JavaGradleBuild"
+description: "Build Java Project"
+
+runs:
+  using: "composite"
+  steps:
+    # Get the Actor type from the runner event
+    - name: Get Actor Type [BOT/PR]
+      if: ${{ github.actor == 'dependabot[bot]' }}
+      run: export ACTOR_TYPE=BOT
+      shell: bash
+    # ---------------------------------------
+
+    # Precondition Check
+    - name: Precondition Check for Environment Variables
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      run: |
+        #SonarQube Parameters
+        echo "::group::Precondition Check"
+        [ -z "$BASE_BRANCH" ] && echo "BASE_BRANCH is null/empty"
+        [ -z "$HEAD_BRANCH" ] && echo "HEAD_BRANCH is null/empty"
+        [ -z "$PR_ID" ] && echo "PR_ID is null/empty"
+        [ -z "$IS_PULL_REQUEST_MERGED" ] && echo "IS_PULL_REQUEST_MERGED is null/empty"
+
+        #Common WorkFlow Parameters 
+        [ -z "$WORKFLOW_USERNAME" ] && echo "WORKFLOW_USERNAME is null/empty"
+        [ -z "$WORKFLOW_TOKEN" ] && echo "WORKFLOW_TOKEN is null/empty"
+
+        #GitHub Parameters 
+        [ -z "$GITHUB_USERNAME" ] && echo "GITHUB_USERNAME is null/empty"
+        [ -z "$GITHUB_TOKEN" ] && echo "GITHUB_TOKEN is null/empty"
+        [ -z "$GITHUB_PACKAGES_TOKEN" ] && echo "GITHUB_PACKAGES_TOKEN is null/empty"
+
+        #Runtime Parameters
+        [ -z "$JAVA_VERSION" ] && echo "JAVA_VERSION is null/empty"
+        [ -z "$GRADLE_VERSION" ] && echo "GRADLE_VERSION is null/empty"
+        [ -z "$SONAR_JDK_VERSION" ] && echo "SONAR_JDK_VERSION is null/empty"
+        [ -z "$NODE_VERSION" ] && echo "NODE_VERSION is null/empty"
+
+        #Script Parameters 
+        [ -z "$DEPENDS_ON_NODE" ] && echo "DEPENDS_ON_NODE is null/empty"
+        [ -z "$BUILD_WEBAPP_PATH" ] && echo "BUILD_WEBAPP_PATH is null/empty"
+        [ -z "$BUILD_ROOT_DIRECTORY" ] && echo "BUILD_ROOT_DIRECTORY is null/empty"
+        [ -z "$BUILD_WEBAPP" ] && echo "BUILD_WEBAPP is null/empty"
+        [ -z "$BUILD_WEBAPP_COMMAND" ] && echo "BUILD_WEBAPP_COMMAND is null/empty"
+        [ -z "$DEPLOYMENT_ENVIRONMENT" ] && echo "DEPLOYMENT_ENVIRONMENT is null/empty"
+
+        #GCP Parameters
+        [ -z "$GCP_SDK_VERSION" ] && echo "GCP_SDK_VERSION is null/empty"
+        [ -z "$GCP_PROJECT_ID" ] && echo "GCP_PROJECT_ID is null/empty"
+        [ -z "$GCP_SA_KEY" ] && echo "GCP_SA_KEY is null/empty"
+
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Caching Gradle
+    # desc: The gradle cache for faster task run
+    # Uses, actions/cache@v2 github library
+    # Doc: https://github.com/actions/cache
+    - name: Cache Gradle
+      uses: actions/cache@v2
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle
+    # ---------------------------------------
+    # Setting up JDK as per project requirement
+    # desc: Sets up Java for building the project
+    # Uses, actions/setup-java@v1
+    # Doc: https://github.com/actions/setup-java
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+    # ---------------------------------------
+    # Caching Node Modules (Happens only if the project has node dependencies)
+    # desc: Caching Node Modules
+    # Uses, actions/cache@v2 github library
+    # Doc: https://github.com/actions/cache
+    - name: Cache node_modules
+      if: fromJSON(${{ env.DEPENDS_ON_NODE }}) == 'true'
+      uses: actions/cache@v2
+      with:
+        submodules: true
+        path: ~/.npm
+        key: ${{ runner.os }}-build-cache-node-modules
+        restore-keys: |
+          ${{ runner.os }}-build-cache-node-modules
+
+    # ---------------------------------------
+
+    # Setting Up Node (Happens only if the project has node dependencies)
+    # desc: Setting up Node Env
+    # Uses, actions/setup-node@v2 github library
+    # Doc: https://github.com/actions/setup-node
+    - name: Setup node
+      if: fromJSON(env.DEPENDS_ON_NODE) == true
+      uses: actions/setup-node@v2
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@Adaptavant"
+    # ---------------------------------------
+
+    # Installing Node dependencies (Happens only if the project has node dependencies)
+    # desc: Setting up Node Env
+    # Please make sure the package.json is available in the root directory
+    - name: Install Node Dependencies
+      if: fromJSON(env.DEPENDS_ON_NODE) == true
+      run: |
+        echo "::group::Install Node Dependencies"
+        npm ci
+        echo "::endgroup::"
+      shell: bash
+      working-directory: ${{ env.BUILD_WEBAPP_PATH }}
+      env:
+        NODE_AUTH_TOKEN: ${{ env.GITHUB_PACKAGES_TOKEN }}
+    # ---------------------------------------
+
+    # Building WebApp
+    # Please make sure the package.json is available in the root directory
+    - name: Build WebApp
+      if: false
+      run: |
+        echo "::group:: Build WebApp"
+        npm run ${{ env.BUILD_WEBAPP_COMMAND }}
+        echo "::endgroup::"
+      shell: bash
+      working-directory: ${{ env.BUILD_WEBAPP_PATH }}
+    # ---------------------------------------
+
+    # Building Gradle
+    # desc: Builds the project without test cases
+    # Uses, gradle/gradle-build-action@v2
+    # Doc: https://github.com/gradle/gradle-build-action
+    - name: Build Gradle
+      env:
+        GITHUB_USERNAME: ${{ env.GITHUB_USERNAME }}
+        GITHUB_TOKEN: ${{ env.GITHUB_PACKAGES_TOKEN }}
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: ${{ env.GRADLE_VERSION }}
+        arguments: build -x test
+    # ---------------------------------------
+
+    # Testing Gradle
+    # desc: Runs Test Cases
+    # Uses, gradle/gradle-build-action@v2
+    # Doc: https://github.com/gradle/gradle-build-action
+    - name: Gradle Test
+      env:
+        GITHUB_USERNAME: ${{ env.GITHUB_USERNAME }}
+        GITHUB_TOKEN: ${{ env.GITHUB_PACKAGES_TOKEN }}
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: ${{ env.GRADLE_VERSION }}
+        arguments: test
+    # ---------------------------------------
+
+    # Setting up JDK 11 For SonarQube
+    # desc: Recent SonarQube update depends on Java 11 so setting up Java 11 for usage
+    # Uses, actions/setup-java@v1
+    # Doc: https://github.com/actions/setup-java
+    - name: Set up JDK for SonarQube
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.SONAR_JDK_VERSION }}
+
+    # Extracting Java 11 path for SonarQube
+    # desc: Recent SonarQube update depends on Java 11 so setting up Java 11 for usage and the path is set to variable `extract_jdk11_path`
+    # Uses, actions/setup-java@v1
+    - name: Extract JDK11 Path
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      id: extract_jdk11_path
+      run: echo "::set-output name=path::${JAVA_HOME}"
+      shell: bash
+
+    # SonarQube
+    # ---------------------------------------
+    # desc: Runs SonarQube
+    # Uses, eskatos/gradle-command-action@v1
+    # Doc: https://github.com/gradle/gradle-build-action
+    - name: SonarQube Scan Java 11
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      env:
+        GITHUB_USERNAME: ${{ env.GITHUB_USERNAME }}
+        GITHUB_TOKEN: ${{ env.GITHUB_PACKAGES_TOKEN }}
+      uses: eskatos/gradle-command-action@v1
+      with:
+        gradle-version: ${{ env.GRADLE_VERSION }}
+        arguments: sonarqube -D org.gradle.java.home=${{steps.extract_jdk11_path.outputs.path}} -x test
+    # ---------------------------------------
+
+    # Setting GCP SDK
+    # desc: Setup GCP SDK for deployment
+    # Uses: google-github-actions/setup-gcloud@master
+    # Doc: https://github.com/google-github-actions/setup-gcloud
+    - name: Setting Up Google Cloud Platform SDK
+      uses: google-github-actions/setup-gcloud@v0
+      with:
+        version: ${{ env.GCP_SDK_VERSION }}
+        project_id: ${{ env.GCP_PROJECT_ID }}
+        service_account_key: ${{ env.GCP_SA_KEY }}
+        export_default_credentials: true
+    # ---------------------------------------
+
+    # GCP App Deployment
+    # desc: Deploying application to gcp
+    # Uses, eskatos/gradle-command-action@v1
+    # Doc: https://github.com/gradle/gradle-build-action
+    - name: GCP Deployment
+      uses: eskatos/gradle-command-action@v1
+      with:
+        gradle-version: ${{ env.GRADLE_VERSION }}
+        build-root-directory: ${{ env.BUILD_ROOT_DIRECTORY }}
+        arguments: appengineDeploy -Pmode=${{ env.DEPLOYMENT_ENVIRONMENT }}
+    # ---------------------------------------
+
+    # Create Release
+    - name: Create Release
+      if: env.BASE_BRANCH == 'master'
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.package-version.outputs.version}}
+        release_name: ${{ github.event.pull_request.title }}
+        body: |
+          ${{ steps.fetchComment.outputs.comment-body }}
+        draft: false
+        prerelease: false
+    # ---------------------------------------
+
+    # Delete head branch after merging the code
+    - name: Delete merged branch
+      uses: velanbala/delete-merged-action@master
+      with:
+        branches: "!dev, !main, !master"
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+    # ---------------------------------------

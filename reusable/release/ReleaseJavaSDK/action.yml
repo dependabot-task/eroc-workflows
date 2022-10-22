@@ -1,0 +1,231 @@
+name: "JavaGradleBuild"
+description: "Build Java Project"
+
+runs:
+  using: "composite"
+  steps:
+    # Get the Actor type from the runner event
+    - name: Get Actor Type [BOT/PR]
+      if: ${{ github.actor == 'dependabot[bot]' }}
+      run: export ACTOR_TYPE=BOT
+      shell: bash
+    # ---------------------------------------
+
+    # Precondition Check
+    - name: Precondition Check for Environment Variables
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      run: |
+        #SonarQube Parameters
+        echo "::group::Precondition Check"
+        [ -z "$BASE_BRANCH" ] && echo "BASE_BRANCH is null/empty"
+        [ -z "$HEAD_BRANCH" ] && echo "HEAD_BRANCH is null/empty"
+        [ -z "$PR_ID" ] && echo "PR_ID is null/empty"
+        [ -z "$IS_PULL_REQUEST_MERGED" ] && echo "IS_PULL_REQUEST_MERGED is null/empty"
+        
+        #Common WorkFlow Parameters 
+        [ -z "$WORKFLOW_USERNAME" ] && echo "WORKFLOW_USERNAME is null/empty"
+        [ -z "$WORKFLOW_TOKEN" ] && echo "WORKFLOW_TOKEN is null/empty"
+        
+        #GitHub Parameters 
+        [ -z "$GITHUB_USERNAME" ] && echo "GITHUB_USERNAME is null/empty"
+        [ -z "$GITHUB_TOKEN" ] && echo "GITHUB_TOKEN is null/empty"
+        # [ -z "$GITHUB_PACKAGES_TOKEN" ] && echo "GITHUB_PACKAGES_TOKEN is null/empty"
+
+        #Runtime Parameters
+        [ -z "$JAVA_VERSION" ] && echo "JAVA_VERSION is null/empty"
+        [ -z "$GRADLE_VERSION" ] && echo "GRADLE_VERSION is null/empty"
+        [ -z "$SONAR_JDK_VERSION" ] && echo "SONAR_JDK_VERSION is null/empty"
+        [ -z "$BUILD_PATH" ] && echo "BUILD_PATH is null/empty"
+
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Caching Gradle
+    # desc: The gradle cache for faster task run
+    # Uses, actions/cache@v2 github library
+    # Doc: https://github.com/actions/cache
+    - name: Gradle Cache 
+      uses: actions/cache@v2
+      with:
+        path: |
+          ~/.gradle/caches
+          ~/.gradle/wrapper
+        key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
+        restore-keys: |
+          ${{ runner.os }}-gradle
+    # ---------------------------------------
+
+    # Setting up JDK 11 For SonarQube
+    # desc: Recent SonarQube update depends on Java 11 so setting up Java 11 for usage
+    # Uses, actions/setup-java@v1
+    # Doc: https://github.com/actions/setup-java
+    - name: Set up JDK for SonarQube Run
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.SONAR_JDK_VERSION }} # Should be always set to Java 11
+    # ---------------------------------------
+
+    # Extracting Java 11 path for SonarQube
+    # desc: Recent SonarQube update depends on Java 11 so setting up Java 11 for usage and the path is set to variable `extract_jdk11_path`
+    # Uses, actions/setup-java@v1
+    - name: Extract JDK11 Path For SonarQube
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      id: extract_jdk11_path
+      run: |
+        echo "::group::Extract JDK11 Path For SonarQube"
+        echo "::set-output name=path::${JAVA_HOME}"
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Setting up JDK as per project requirement
+    # desc: Sets up Java for building the project
+    # Uses, actions/setup-java@v1
+    # Doc: https://github.com/actions/setup-java
+    - name: Set up JDK
+      uses: actions/setup-java@v1
+      with:
+        java-version: ${{ env.JAVA_VERSION }}
+    # ---------------------------------------
+
+    # Building Gradle
+    # desc: Builds the project without test cases
+    # Uses, gradle/gradle-build-action@v2
+    # Doc: https://github.com/gradle/gradle-build-action
+    - name: Build Gradle
+      env:
+        GITHUB_USERNAME: ${{ env.GITHUB_USERNAME }}
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: ${{ env.GRADLE_VERSION }}
+        arguments: build -x test
+    # ---------------------------------------
+
+    # Testing Gradle
+    # desc: Runs Test Cases
+    # Uses, gradle/gradle-build-action@v2
+    # Doc: https://github.com/gradle/gradle-build-action
+    - name: Gradle Test
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      env:
+        GITHUB_USERNAME: ${{ env.GITHUB_USERNAME }}
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: ${{ env.GRADLE_VERSION }}
+        arguments: test
+    # ---------------------------------------
+
+    # SonarQube
+    # desc: Runs SonarQube
+    # Uses, eskatos/gradle-command-action@v1
+    # Doc: https://github.com/gradle/gradle-build-action
+    - name: SonarQube Scan
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      env:
+        GITHUB_USERNAME: ${{ env.GITHUB_USERNAME }}
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+      uses: eskatos/gradle-command-action@v1
+      with:
+        gradle-version: ${{ env.GRADLE_VERSION }}
+        arguments: sonarqube -D org.gradle.java.home=${{steps.extract_jdk11_path.outputs.path}} -x test
+    # ---------------------------------------
+
+    # Retrieve version of the sdk
+    # Retrieves the version from the build.gradle file
+    - name: Retrieve version
+      run: |
+          echo "::group::Retrieving Version"
+          if [[ $ACTOR_TYPE == 'BOT' ]]; then
+              echo "::set-output name=released_package_version::$(grep "version = '" ./${{ env.BUILD_PATH }}/build.gradle | awk '{print $3}')[bot]"
+          else
+              echo "::set-output name=released_package_version::$(grep "version = '" ./${{ env.BUILD_PATH }}/build.gradle | awk '{print $3}')"
+          fi
+          echo "::endgroup::"
+      shell: bash
+      id: version
+    # ---------------------------------------
+
+    # Generate change logs and add it as comment in the respective pull request. It Will work only for pull request event
+    - name: Generate Change logs
+      id: change-logs
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      uses: bala-raj/pull-request-changelog@master
+      with:
+        token: ${{ env.GITHUB_TOKEN }}
+        branch: ${{ env.BASE_BRANCH }}
+        version: ${{ steps.version.outputs.released_package_version }}
+
+    # ---------------------------------------
+
+    # Prints the package version on console
+    - name: Printing
+      run: |
+        echo "::group::Printing Version"
+        echo "Getting Published Git Package version :-> "
+        echo ${{steps.version.outputs.released_package_version}}
+        echo "::endgroup::"
+      shell: bash
+
+     # Log New Version
+    - name: New version id
+      run: |
+        echo Bump Type: ${{ steps.change-logs.outputs.next-version }}
+      shell: bash
+
+    # Update Version Bump
+    - name: Update Version In build.gradle file
+      run: |
+        echo "::group::Updating version in build.gradle file"
+        sed -i "s/${{steps.version.outputs.released_package_version }}/'${{ steps.change-logs.outputs.next-version}}'/" ${GITHUB_WORKSPACE}/build.gradle
+        echo "::endgroup::"
+      shell: bash
+
+    # Commit Version Bump
+    - name: Commit Version Bump
+      uses: stefanzweifel/git-auto-commit-action@v4
+      with:
+        file_pattern: build.gradle
+        commit_message: "bot: Bumping package version"
+        skip_checkout: true
+        branch: ${{ env.BASE_BRANCH }}
+    # ---------------------------------------
+
+    # Create Release
+    - name: Create Release
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ steps.change-logs.outputs.next-version }}
+        release_name: ${{ github.event.pull_request.title }} # Get pull request Title
+        body:
+          | # All the Changes history  or features in the corresponding release
+          ${{ steps.change-logs.outputs.content }}
+        draft: false
+        prerelease: false # This is not a pre-release so set false
+    # ---------------------------------------
+
+    # Publishing the Package
+    - name: Publish Github Package
+      env:
+        GITHUB_USERNAME: ${{ env.GITHUB_USERNAME }}
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+      uses: gradle/gradle-build-action@v2
+      with:
+        gradle-version: ${{ env.GRADLE_VERSION }}
+        build-root-directory: ${{ env.BUILD_PATH }}
+        arguments: publish
+    # ---------------------------------------
+
+    # Delete head branch after merging the code
+    - name: Delete merged branch
+      uses: velanbala/delete-merged-action@master
+      with:
+        branches: "!dev, !main, !master"
+      env:
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+    # ---------------------------------------

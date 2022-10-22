@@ -1,0 +1,112 @@
+name: "NodeBuild"
+description: "Builds Node Project with Test cases and SonarQube"
+
+runs:
+  using: "composite"
+  steps:
+    # Precondition Check
+    - name: Precondition Check Environment Variables
+      run: |
+        echo "::group::Precondition Check"
+        [ -z "$BASE_BRANCH" ] && echo "BASE_BRANCH is null/empty"
+        [ -z "$HEAD_BRANCH" ] && echo "HEAD_BRANCH is null/empty"
+        [ -z "$PR_ID" ] && echo "PR_ID is null/empty"
+        [ -z "$IS_PULL_REQUEST_MERGED" ] && echo "IS_PULL_REQUEST_MERGED is null/empty"
+
+        [ -z "$WORKFLOW_USERNAME" ] && echo "WORKFLOW_USERNAME is null/empty"
+        [ -z "$WORKFLOW_TOKEN" ] && echo "WORKFLOW_TOKEN is null/empty"
+
+        [ -z "$GITHUB_USERNAME" ] && echo "GITHUB_USERNAME is null/empty"
+        [ -z "$GITHUB_PACKAGES_TOKEN" ] && echo "GITHUB_PACKAGES_TOKEN is null/empty"
+        [ -z "$GITHUB_TOKEN" ] && echo "GITHUB_TOKEN is null/empty"
+        [ -z "$SONAR_TOKEN" ] && echo "SONAR_TOKEN is null/empty"
+
+        [ -z "$LINT_SCRIPT" ] && echo "LINT_SCRIPT is null/empty"
+        [ -z "$BUILD_SCRIPT" ] && echo "BUILD_SCRIPT is null/empty"
+        [ -z "$TEST_SCRIPT" ] && echo "TEST_SCRIPT is null/empty"
+        [ -z "$SONAR_SCRIPT" ] && echo "SONAR_SCRIPT is null/empty"
+        [ -z "$NODE_VERSION" ] && echo "NODE_VERSION is null/empty"
+        echo "::endgroup::"
+      shell: bash
+
+    # Caching Node Modules (Happens only if the project has node dependencies)
+    # desc: Caching Node Modules
+    # Uses, actions/cache@v2 github library
+    # Doc: https://github.com/actions/cache
+    - name: Cache node_modules
+      uses: actions/cache@v2
+      with:
+        submodules: true
+        path: ~/.npm
+        key: ${{ runner.os }}-build-cache-node-modules
+        restore-keys: |
+          ${{ runner.os }}-build-cache-node-modules
+    # ---------------------------------------
+    # Setting Up Node
+    - name: Setup Registry
+      uses: actions/setup-node@v1
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        registry-url: "https://npm.pkg.github.com"
+        scope: "@Adaptavant"
+    # ---------------------------------------
+
+    # Installing Node dependencies
+    # desc: Setting up Node Env
+    # Please make sure the package.json is available in the root directory
+    - name: Install Node Dependencies
+      run: |
+        echo "::group::Install Node Dependencies"       
+        npm ci
+        echo "::endgroup::"
+      shell: bash
+      env:
+        NODE_AUTH_TOKEN: ${{ env.GITHUB_PACKAGES_TOKEN }}
+    # ---------------------------------------
+
+    # Running Lint
+    - name: Lint
+      run: |
+        echo "::group::Running Lint"
+        npm run ${{ env.LINT_SCRIPT }}
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Running Build
+    - name: Build
+      run: |
+        echo "::group::Running Build"
+        npm run ${{ env.BUILD_SCRIPT }}
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # Running Test Case
+    - name: Test
+      run: |
+        echo "::group::Running Test"
+        npm run ${{ env.TEST_SCRIPT }}
+        echo "::endgroup::"
+      shell: bash
+    # ---------------------------------------
+
+    # SonarQube Report
+    - name: SonarQube Report
+      run: |
+        echo "::group::Running SonarQube"
+        npm run ${{ env.SONAR_SCRIPT }}
+        echo "::endgroup::"
+      shell: bash
+      env:
+        SONAR_TOKEN: ${{ env.SONAR_TOKEN }}
+    # ---------------------------------------
+
+    # Generate change logs and add it as comment in the respective pull request. It Will work only for pull request event
+    - name: Generate Change logs
+      if: ${{ github.actor != 'dependabot[bot]' }}
+      uses: bala-raj/pull-request-changelog@master
+      with:
+        token: ${{ env.GITHUB_TOKEN }}
+        branch: ${{ env.BASE_BRANCH }}
+    # ---------------------------------------
