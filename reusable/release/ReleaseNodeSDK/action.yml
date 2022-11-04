@@ -169,6 +169,7 @@ runs:
 
     # Delete head branch after merging the code
     - name: Delete merged branch
+      if: ${{ env.HEAD_BRANCH }} == 'bot'
       uses: koj-co/delete-merged-action@master
       with:
         branches: "!dev, !main, !master"
