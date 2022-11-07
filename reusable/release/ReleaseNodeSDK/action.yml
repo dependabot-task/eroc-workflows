@@ -169,10 +169,16 @@ runs:
 
     # Delete head branch after merging the code
     - name: Delete merged branch
-      if: ${{ env.HEAD_BRANCH }} != 'bot'
       uses: koj-co/delete-merged-action@master
       with:
         branches: "!dev, !main, !master"
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
     # ---------------------------------------
+
+    - name: Create Bot Branch
+      if: ${{ env.HEAD_BRANCH }} == 'bot'
+      run: |
+        gh codespace create --branch bot 
+      env:
+        GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
