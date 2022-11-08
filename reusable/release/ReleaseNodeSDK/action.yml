@@ -13,26 +13,21 @@ runs:
         [ -z "$HEAD_BRANCH" ] && echo "HEAD_BRANCH is null/empty"
         [ -z "$PR_ID" ] && echo "PR_ID is null/empty"
         [ -z "$IS_PULL_REQUEST_MERGED" ] && echo "IS_PULL_REQUEST_MERGED is null/empty"
-
         #Common WorkFlow Parameters 
         [ -z "$WORKFLOW_USERNAME" ] && echo "WORKFLOW_USERNAME is null/empty"
         [ -z "$WORKFLOW_TOKEN" ] && echo "WORKFLOW_TOKEN is null/empty"
-
         #GitHub Parameters 
         [ -z "$GITHUB_USERNAME" ] && echo "GITHUB_USERNAME is null/empty"
         [ -z "$GITHUB_TOKEN" ] && echo "GITHUB_TOKEN is null/empty"
         [ -z "$GITHUB_PACKAGES_TOKEN" ] && echo "GITHUB_PACKAGES_TOKEN is null/empty"
-
         #Runtime Parameters
         [ -z "$SONAR_JDK_VERSION" ] && echo "SONAR_JDK_VERSION is null/empty"
         [ -z "$NODE_VERSION" ] && echo "NODE_VERSION is null/empty"
-
         #Script Parameters 
         [ -z "$BUILD_SCRIPT" ] && echo "BUILD_SCRIPT is null/empty"
         [ -z "$TEST_SCRIPT" ] && echo "TEST_SCRIPT is null/empty"
         [ -z "$SONAR_SCRIPT" ] && echo "SONAR_SCRIPT is null/empty"
         [ -z "$LINT_SCRIPT" ] && echo "LINT_SCRIPT is null/empty"
-
         echo "::endgroup::"
       shell: bash
     # ---------------------------------------
@@ -50,7 +45,7 @@ runs:
         restore-keys: |
           ${{ runner.os }}-build-cache-node-modules
     # ---------------------------------------
-    
+
     # Setup Registry
     - name: Setup Registry
       uses: actions/setup-node@v1
@@ -128,7 +123,7 @@ runs:
         branch: ${{ env.BASE_BRANCH }}
         version: ${{ steps.package-version.outputs.version }}
     # ---------------------------------------
-      
+
     # # Update version
     # - name: Update version and push
     #   run: |
