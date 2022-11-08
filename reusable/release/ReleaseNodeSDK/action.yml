@@ -176,4 +176,4 @@ runs:
       run: |
         gh codespace create --branch bot 
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
