@@ -170,10 +170,3 @@ runs:
       env:
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
     # ---------------------------------------
-
-    - name: Create Bot Branch
-      if: ${{ env.HEAD_BRANCH }} == 'bot'
-      run: |
-        gh codespace create --branch bot 
-      env:
-        GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
