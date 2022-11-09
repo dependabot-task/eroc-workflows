@@ -141,8 +141,9 @@ runs:
 
     # Publish package
     - name: Publish package
-      run: npm version minor
-      run: npm publish
+      run: |
+        npm version minor
+        npm publish
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ env.GITHUB_TOKEN }}
