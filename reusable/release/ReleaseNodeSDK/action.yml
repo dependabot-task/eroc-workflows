@@ -141,6 +141,7 @@ runs:
 
     # Publish package
     - name: Publish package
+      run: npm version minor
       run: npm publish
       shell: bash
       env:
