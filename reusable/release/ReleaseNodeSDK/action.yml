@@ -62,6 +62,7 @@ runs:
       run: |
         echo "::group::Install Node Dependencies"       
         npm ci
+        npm version patch
         echo "::endgroup::"
       shell: bash
       env:
@@ -141,9 +142,7 @@ runs:
 
     # Publish package
     - name: Publish package
-      run: |
-        npm version minor
-        npm publish
+      run: npm publish
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ env.GITHUB_TOKEN }}
