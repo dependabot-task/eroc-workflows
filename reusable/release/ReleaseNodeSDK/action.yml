@@ -141,9 +141,7 @@ runs:
 
     # Publish package
     - name: Publish package
-      run: |
-        npm unpublish
-        npm publish
+      run: npm publish
       shell: bash
       env:
         NODE_AUTH_TOKEN: ${{ env.GITHUB_TOKEN }}
