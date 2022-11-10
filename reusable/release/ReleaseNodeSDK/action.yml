@@ -142,7 +142,6 @@ runs:
     # Publish package
     - name: Publish package
       run: |
-        npm unpublish
         npm publish
       shell: bash
       env:
