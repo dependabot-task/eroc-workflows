@@ -1,6 +1,10 @@
 name: "NodeBuild"
 description: "Builds Node Project with Test cases and SonarQube"
 
+permissions:
+  contents: write
+  pull-requests: write
+
 runs:
   using: "composite"
   steps:
