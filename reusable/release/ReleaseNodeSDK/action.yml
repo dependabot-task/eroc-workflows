@@ -176,3 +176,4 @@ runs:
       run: |
         git checkout -b bot
         git push origin bot
+      shell: bash
