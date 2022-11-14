@@ -132,7 +132,7 @@ runs:
         git config --global user.email "ci-cd-full@users.noreply.github.com"
         git config --global user.name "ci-cd-full"
         npm version patch 
-        git push
+        git push origin HEAD:bot
       shell: bash
 
     - name: Create PR
