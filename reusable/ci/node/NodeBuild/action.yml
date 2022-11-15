@@ -125,20 +125,3 @@ runs:
         PR_URL: ${{github.event.pull_request.html_url}}
         GITHUB_TOKEN: ${{env.GITHUB_TOKEN}}
       shell: bash
-
-    - name: Bump version
-      if: ${{ github.actor == 'dependabot[bot]' }}
-      run: |
-        git config --global user.email "ci-cd-full@users.noreply.github.com"
-        git config --global user.name "ci-cd-full"
-        npm version patch 
-        git push origin bot
-      shell: bash
-
-    - name: Create PR
-      if: ${{ github.actor == 'dependabot[bot]' }}
-      run: |
-        gh pr create --head bot --title "Dependabot Updates" --body "Merging Dependabot package updates to the default branch" 
-      env:
-        GITHUB_TOKEN: ${{env.GITHUB_TOKEN}}
-      shell: bash
